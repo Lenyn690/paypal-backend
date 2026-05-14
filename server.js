@@ -7,17 +7,19 @@ dotenv.config();
 
 const app = express();
 
+/*
+  ✅ CORS CORRECTO (clave para Netlify → Render)
+*/
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type"]
 }));
+
 app.use(express.json());
 
 /*
-|--------------------------------------------------------------------------
-| PAYPAL ENVIRONMENT (SANDBOX)
-|--------------------------------------------------------------------------
+  PAYPAL ENV (SANDBOX)
 */
 const environment = new paypal.core.SandboxEnvironment(
   process.env.PAYPAL_CLIENT_ID,
@@ -27,12 +29,14 @@ const environment = new paypal.core.SandboxEnvironment(
 const client = new paypal.core.PayPalHttpClient(environment);
 
 /*
-|--------------------------------------------------------------------------
-| CREATE ORDER (crea el pago)
-|--------------------------------------------------------------------------
+  CREATE ORDER
 */
 app.post("/create-order", async (req, res) => {
+
+  console.log("🔥 Request recibida desde frontend");
+
   try {
+
     const request = new paypal.orders.OrdersCreateRequest();
 
     request.prefer("return=representation");
@@ -51,26 +55,26 @@ app.post("/create-order", async (req, res) => {
 
     const order = await client.execute(request);
 
-    res.json({
-      id: order.result.id
-    });
+    console.log("✅ ORDER ID:", order.result.id);
+
+    res.json({ id: order.result.id });
 
   } catch (error) {
-    console.error("❌ ERROR PAYPAL:", error);
+
+    console.error("❌ PAYPAL ERROR:", error);
 
     res.status(500).json({
       error: error.message
     });
+
   }
 });
 
 /*
-|--------------------------------------------------------------------------
-| SERVER START (Render usa PORT automático)
-|--------------------------------------------------------------------------
+  SERVER
 */
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("Servidor funcionando en puerto " + PORT);
+  console.log("🚀 Servidor funcionando en puerto", PORT);
 });
