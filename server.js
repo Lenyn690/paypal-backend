@@ -1,80 +1,83 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-import paypal from "@paypal/checkout-server-sdk";
-
-dotenv.config();
+import fetch from "node-fetch";
 
 const app = express();
 
-/*
-  ✅ CORS CORRECTO (clave para Netlify → Render)
-*/
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"]
-}));
-
+app.use(cors());
 app.use(express.json());
 
-/*
-  PAYPAL ENV (SANDBOX)
-*/
-const environment = new paypal.core.SandboxEnvironment(
-  process.env.PAYPAL_CLIENT_ID,
-  process.env.PAYPAL_CLIENT_SECRET
-);
+// 🔐 Variables de entorno (Render)
+const CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+const CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
 
-const client = new paypal.core.PayPalHttpClient(environment);
+// 🌍 URL PayPal Sandbox
+const PAYPAL_API = "https://api-m.sandbox.paypal.com";
 
-/*
-  CREATE ORDER
-*/
+// 🧠 Obtener Access Token
+async function getAccessToken() {
+  const auth = Buffer.from(CLIENT_ID + ":" + CLIENT_SECRET).toString("base64");
+
+  const response = await fetch(`${PAYPAL_API}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: "grant_type=client_credentials"
+  });
+
+  const data = await response.json();
+
+  if (!data.access_token) {
+    console.error("Error token PayPal:", data);
+    throw new Error("No se pudo obtener token PayPal");
+  }
+
+  return data.access_token;
+}
+
+// 💳 Crear orden
 app.post("/create-order", async (req, res) => {
-
-  console.log("🔥 Request recibida desde frontend");
-
   try {
+    const token = await getAccessToken();
 
-    const request = new paypal.orders.OrdersCreateRequest();
-
-    request.prefer("return=representation");
-
-    request.requestBody({
-      intent: "CAPTURE",
-      purchase_units: [
-        {
-          amount: {
-            currency_code: "USD",
-            value: "10.00"
+    const response = await fetch(`${PAYPAL_API}/v2/checkout/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        intent: "CAPTURE",
+        purchase_units: [
+          {
+            amount: {
+              currency_code: "USD",
+              value: "10.00"
+            }
           }
-        }
-      ]
+        ]
+      })
     });
 
-    const order = await client.execute(request);
+    const data = await response.json();
 
-    console.log("✅ ORDER ID:", order.result.id);
+    console.log("ORDER CREATED:", data);
 
-    res.json({ id: order.result.id });
+    res.json(data);
 
   } catch (error) {
-
-    console.error("❌ PAYPAL ERROR:", error);
-
+    console.error("ERROR /create-order:", error);
     res.status(500).json({
-      error: error.message
+      error: "Error creando orden"
     });
-
   }
 });
 
-/*
-  SERVER
-*/
-const PORT = process.env.PORT || 10000;
+// 🚀 Server
+const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("🚀 Servidor funcionando en puerto", PORT);
+app.listen(PORT, () => {
+  console.log("Servidor funcionando en puerto " + PORT);
 });
