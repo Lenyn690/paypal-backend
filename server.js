@@ -1,22 +1,27 @@
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// 🔐 Variables de entorno (Render)
+// 🔐 ENV VARIABLES
 const CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
 const CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
 
-// 🌍 URL PayPal Sandbox
 const PAYPAL_API = "https://api-m.sandbox.paypal.com";
 
-// 🧠 Obtener Access Token
+// 🧠 TOKEN (SIN node-fetch IMPORT)
 async function getAccessToken() {
-  const auth = Buffer.from(CLIENT_ID + ":" + CLIENT_SECRET).toString("base64");
+
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    throw new Error("Faltan variables PAYPAL_CLIENT_ID o PAYPAL_CLIENT_SECRET");
+  }
+
+  const auth = Buffer.from(
+    CLIENT_ID + ":" + CLIENT_SECRET
+  ).toString("base64");
 
   const response = await fetch(`${PAYPAL_API}/v1/oauth2/token`, {
     method: "POST",
@@ -30,16 +35,17 @@ async function getAccessToken() {
   const data = await response.json();
 
   if (!data.access_token) {
-    console.error("Error token PayPal:", data);
-    throw new Error("No se pudo obtener token PayPal");
+    console.error(data);
+    throw new Error("No se pudo obtener access token");
   }
 
   return data.access_token;
 }
 
-// 💳 Crear orden
+// 💳 CREATE ORDER
 app.post("/create-order", async (req, res) => {
   try {
+
     const token = await getAccessToken();
 
     const response = await fetch(`${PAYPAL_API}/v2/checkout/orders`, {
@@ -63,21 +69,17 @@ app.post("/create-order", async (req, res) => {
 
     const data = await response.json();
 
-    console.log("ORDER CREATED:", data);
+    return res.json(data);
 
-    res.json(data);
-
-  } catch (error) {
-    console.error("ERROR /create-order:", error);
-    res.status(500).json({
-      error: "Error creando orden"
-    });
+  } catch (err) {
+    console.error("ERROR CREATE ORDER:", err);
+    res.status(500).json({ error: "Error creando orden" });
   }
 });
 
-// 🚀 Server
+// 🚀 START SERVER
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("Servidor funcionando en puerto " + PORT);
+  console.log("Servidor OK en puerto", PORT);
 });
